@@ -118,12 +118,15 @@ class RestView(object):
 
     @view_config(request_method='PATCH')
     def patch(self):
-        # data, type, id
-        # data = {}
-        # context = self.context
-        # attrs = data['attributes']
-        # schema = get_schema(obj, request)
-        pass
+        body = self.request.json_body
+        data = body['data']
+        assert data['id'] == self.context.name
+        assert data['type'] == self.context.type_info.name
+
+        attrs = data['attributes']
+
+        schema = get_schema(self.context, self.request)
+        import pdb; pdb.set_trace()
 
     @view_config(request_method='PUT')
     def put(self):
@@ -140,6 +143,18 @@ def get_schema(obj, request, name=u'default'):
     schema_factory = request.registry.getUtility(ISchemaFactory,
                                                  name=factory_name)
     return schema_factory(obj, request)
+
+
+def filter_schema(schema, allowed_fields):
+    """ Filters a schema to include only allowed fields
+    """
+
+    self = schema
+    cloned = self.__class__(self.typ)
+    cloned.__dict__.update(self.__dict__)
+    cloned.children = [node.clone() for node in self.children
+                       if node.name in allowed_fields]
+    return cloned
 
 
 def serialize(obj, request, name=u'default'):

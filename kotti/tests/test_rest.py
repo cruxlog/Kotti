@@ -112,3 +112,31 @@ class TestRestView:
 
         js = json.loads(render('kotti_jsonp', doc, request=req))
         assert js['data']['attributes']['body'] == "1"
+
+    def test_patch(self, config):
+        from kotti.resources import Document
+        from kotti.rest import ACCEPT
+        from webob.acceptparse import MIMEAccept
+        from pyramid.request import Request
+
+        config.include('kotti.rest')
+        req = Request(accept=MIMEAccept(ACCEPT),
+                           environ={'REQUEST_METHOD': 'PATCH'})
+        req.registry = config.registry
+        req.body = json.dumps({
+            'data': {
+                'id': 'first',
+                'type': 'Document',
+                'attributes': {
+                    'title': u"Title was changed",
+                    'body': u"Body was changed",
+                }
+            }
+        })
+        doc = Document(name='first',
+                       title=u'Title here',
+                       description=u"Description here",
+                       body=u"body here")
+        view = self.get_view(doc, req, name='')
+        resp = view(doc, req)
+        import pdb; pdb.set_trace()
