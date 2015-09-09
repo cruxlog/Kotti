@@ -74,7 +74,26 @@ class TestSerializeDefaultContent:
 
 
 class TestRestView:
-    def get_view(self, context, request, name):
+
+    def _make_request(self, config, **kw):
+        from kotti.rest import ACCEPT
+        from webob.acceptparse import MIMEAccept
+        from pyramid.request import Request
+
+        _environ = {
+            'PATH_INFO': '/',
+            'SERVER_NAME': 'example.com',
+            'SERVER_PORT': '80',
+            'wsgi.url_scheme': 'http',
+            'REQUEST_METHOD': 'PATCH'
+            }
+        _environ.update(**kw)
+
+        req = Request(accept=MIMEAccept(ACCEPT), environ=_environ)
+        req.registry = config.registry
+        return req
+
+    def _get_view(self, context, request, name):
         from pyramid.compat import map_
         from pyramid.interfaces import IView
         from pyramid.interfaces import IViewClassifier
@@ -97,7 +116,7 @@ class TestRestView:
         req = DummyRequest(accept=MIMEAccept(ACCEPT))
         doc = Document()
 
-        view = self.get_view(doc, req, name='')
+        view = self._get_view(doc, req, name='')
         resp = view(doc, req)
         assert resp.json
 
@@ -115,28 +134,28 @@ class TestRestView:
 
     def test_patch(self, config):
         from kotti.resources import Document
-        from kotti.rest import ACCEPT
-        from webob.acceptparse import MIMEAccept
-        from pyramid.request import Request
 
         config.include('kotti.rest')
-        req = Request(accept=MIMEAccept(ACCEPT),
-                           environ={'REQUEST_METHOD': 'PATCH'})
-        req.registry = config.registry
+
+        doc = Document(name='first',
+                       title=u'Title here',
+                       description=u"Description here",
+                       body=u"body here")
+
+        req = self._make_request(config)
         req.body = json.dumps({
             'data': {
                 'id': 'first',
                 'type': 'Document',
                 'attributes': {
                     'title': u"Title was changed",
-                    'body': u"Body was changed",
+                    'body': u"Body was changed"
                 }
             }
         })
-        doc = Document(name='first',
-                       title=u'Title here',
-                       description=u"Description here",
-                       body=u"body here")
-        view = self.get_view(doc, req, name='')
-        resp = view(doc, req)
-        import pdb; pdb.set_trace()
+
+        view = self._get_view(doc, req, name='')
+        data = view(doc, req).json_body
+
+        assert data['data']['attributes']['title'] == u"Title was changed"
+        assert data['data']['attributes']['body'] == u"Body was changed"

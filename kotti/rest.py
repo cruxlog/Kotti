@@ -114,19 +114,27 @@ class RestView(object):
         schema = schema_factory(self.context, name='edit')(
             self.context, self.request)
         validated = schema.deserialize(self.request.form.get('data'))
-        self.context.__dict__.update(**validated)
+
+        for k, v in validated.items():
+            setattr(self.context, k, v)
+
+        return self.context
 
     @view_config(request_method='PATCH')
     def patch(self):
-        body = self.request.json_body
-        data = body['data']
+        schema = get_schema(self.context, self.request)
+        data = self.request.json_body['data']
+
         assert data['id'] == self.context.name
         assert data['type'] == self.context.type_info.name
 
-        attrs = data['attributes']
+        validated = schema.deserialize(data['attributes'])
+        attrs = dict((k, v) for k, v in validated.items()
+                     if k in data['attributes'])
+        for k, v in attrs.items():
+            setattr(self.context, k, v)
 
-        schema = get_schema(self.context, self.request)
-        import pdb; pdb.set_trace()
+        return self.context
 
     @view_config(request_method='PUT')
     def put(self):
