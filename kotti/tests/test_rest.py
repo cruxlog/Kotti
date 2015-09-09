@@ -106,7 +106,7 @@ class TestRestView:
 
         return request.registry.adapters.lookup(provides, IView, name=name)
 
-    def test_predicate_matching(self, config):
+    def test_get(self, config):
         from kotti.resources import Document
         from kotti.rest import ACCEPT
         from webob.acceptparse import MIMEAccept
@@ -117,8 +117,10 @@ class TestRestView:
         doc = Document()
 
         view = self._get_view(doc, req, name='')
-        resp = view(doc, req)
-        assert resp.json
+        data = view(doc, req).json_body
+
+        assert 'attributes' in data['data']
+        assert 'meta' in data
 
     def test_jsonp_as_renderer(self, config):
         from pyramid.renderers import render

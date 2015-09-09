@@ -24,6 +24,7 @@ Default view page should take json into account
 """
 
 from kotti.resources import Content, Document, File #, IImage
+from kotti.util import _
 from pyramid.renderers import JSONP
 from pyramid.view import view_config, view_defaults
 from zope.interface import Interface
@@ -165,6 +166,40 @@ def filter_schema(schema, allowed_fields):
     return cloned
 
 
+class MetadataSchema(colander.MappingSchema):
+    """ Schema that exposes some metadata information about a content
+    """
+
+    modification_date = colander.SchemaNode(
+        colander.Date(),
+        title=_(u'Modification Date'),
+    )
+
+    creation_date = colander.SchemaNode(
+        colander.Date(),
+        title=_(u'Modification Date'),
+    )
+
+    state = colander.SchemaNode(
+        colander.String(),
+        title=_(u'State'),
+    )
+    state = colander.SchemaNode(
+        colander.String(),
+        title=_(u'State'),
+    )
+
+    default_view = colander.SchemaNode(
+        colander.String(),
+        title=_(u'Default view'),
+    )
+
+    in_navigation = colander.SchemaNode(
+        colander.String(),
+        title=_(u'In navigation'),
+    )
+
+
 def serialize(obj, request, name=u'default'):
     """ Serialize an object with the most appropriate serializer
     """
@@ -179,8 +214,9 @@ def serialize(obj, request, name=u'default'):
         'children': [request.resource_url(child)
                      for child in obj.children_with_permission(request)]
     }
+    meta = MetadataSchema().serialize(obj.__dict__)
 
-    return dict(data=res)
+    return dict(data=res, meta=meta)
 
 
 datetime_types = (datetime.time, datetime.date, datetime.datetime)
