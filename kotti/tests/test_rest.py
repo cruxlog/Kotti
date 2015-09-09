@@ -1,4 +1,4 @@
-from kotti.resources import TypeInfo, Content
+from kotti.resources import TypeInfo, Content, Document
 from kotti.rest import schema_factory
 from kotti.testing import DummyRequest
 from sqlalchemy import Column, ForeignKey, Integer
@@ -61,7 +61,6 @@ class TestSerializeDefaultContent:
         assert resp['data']['attributes']['tags'] == colander.null
 
     def test_serialize_document(self, config):
-        from kotti.resources import Document
         resp = self.make_one(config, Document, body=u'Body text')
         assert resp['data']['attributes']['body'] == u'Body text'
 
@@ -93,7 +92,7 @@ class TestRestView:
         req.registry = config.registry
         return req
 
-    def _get_view(self, context, request, name):
+    def _get_view(self, context, request, name=''):
         from pyramid.compat import map_
         from pyramid.interfaces import IView
         from pyramid.interfaces import IViewClassifier
@@ -107,7 +106,6 @@ class TestRestView:
         return request.registry.adapters.lookup(provides, IView, name=name)
 
     def test_get(self, config):
-        from kotti.resources import Document
         from kotti.rest import ACCEPT
         from webob.acceptparse import MIMEAccept
 
@@ -116,7 +114,7 @@ class TestRestView:
         req = DummyRequest(accept=MIMEAccept(ACCEPT))
         doc = Document()
 
-        view = self._get_view(doc, req, name='')
+        view = self._get_view(doc, req)
         data = view(doc, req).json_body
 
         assert 'attributes' in data['data']
@@ -124,7 +122,6 @@ class TestRestView:
 
     def test_jsonp_as_renderer(self, config):
         from pyramid.renderers import render
-        from kotti.resources import Document
 
         config.include('kotti.rest')
 
@@ -134,8 +131,28 @@ class TestRestView:
         js = json.loads(render('kotti_jsonp', doc, request=req))
         assert js['data']['attributes']['body'] == "1"
 
+    def test_put(self, config):
+        config.include('kotti.rest')
+        req = self._make_request(config, REQUEST_METHOD='PUT')
+        req.body = json.dumps({
+            'data': {
+                'type': 'Document',
+                'attributes': {
+                    'title': u"Title here",
+                    'body': u"Body here"
+                }
+            }
+        })
+        doc = Document(name='parent')
+        view = self._get_view(doc, req)
+        data = view(doc, req).json_body['data']
+
+        assert data['attributes']['title'] == u'Title here'
+        assert data['id'] == 'title-here'
+
+        assert doc.keys() == ['title-here']
+
     def test_patch(self, config):
-        from kotti.resources import Document
 
         config.include('kotti.rest')
 
@@ -156,7 +173,34 @@ class TestRestView:
             }
         })
 
-        view = self._get_view(doc, req, name='')
+        view = self._get_view(doc, req)
+        data = view(doc, req).json_body
+
+        assert data['data']['attributes']['title'] == u"Title was changed"
+        assert data['data']['attributes']['body'] == u"Body was changed"
+
+    def test_post(self, config):
+
+        config.include('kotti.rest')
+
+        doc = Document(name='first',
+                       title=u'Title here',
+                       description=u"Description here",
+                       body=u"body here")
+
+        req = self._make_request(config)
+        req.body = json.dumps({
+            'data': {
+                'id': 'first',
+                'type': 'Document',
+                'attributes': {
+                    'title': u"Title was changed",
+                    'body': u"Body was changed"
+                }
+            }
+        })
+
+        view = self._get_view(doc, req)
         data = view(doc, req).json_body
 
         assert data['data']['attributes']['title'] == u"Title was changed"

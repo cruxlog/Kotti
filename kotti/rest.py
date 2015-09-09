@@ -1,6 +1,5 @@
 """ JSON Encoders, serializers, REST views and utilities
 
-
 WIP: we need schema factory.
 
 We need to serialize an object, to publish it as JSON.
@@ -21,10 +20,15 @@ def get_schema_factory(context=None, type_='default', name=None):
 
 
 Default view page should take json into account
+
+TODO: handle exceptions in the REST view.
+Any exception should be sent as JSON response
 """
 
 from kotti.resources import Content, Document, File #, IImage
 from kotti.util import _
+from kotti.util import title_to_name
+from pyramid.httpexceptions import HTTPNoContent
 from pyramid.renderers import JSONP
 from pyramid.view import view_config, view_defaults
 from zope.interface import Interface
@@ -41,6 +45,14 @@ class ISchemaFactory(Interface):
 
     def __call__(context, request):
         """ Returns a colander schema instance """
+
+
+class IContentFactory(Interface):
+    """ A factory that can build a content item. Can be a class, ex: Document
+    """
+
+    def __call__(context, request):
+        """ Construct a new object """
 
 
 def _schema_factory_name(context=None, type_name=None, name=u'default'):
@@ -67,6 +79,8 @@ def schema_factory(klass, name=u'default'):
         def callback(context, funcname, ob):
             config = context.config.with_package(info.module)
             config.registry.registerUtility(wrapped, ISchemaFactory, name=name)
+            config.registry.registerUtility(klass, IContentFactory,
+                                            name=klass.type_info.name)
 
         info = venusian.attach(wrapped, callback, category='pyramid')
         return wrapped
@@ -112,9 +126,14 @@ class RestView(object):
 
     @view_config(request_method='POST')
     def post(self):
+        data = self.request.json_body['data']
+
+        assert data['id'] == self.context.name
+        assert data['type'] == self.context.type_info.name
+
         schema = schema_factory(self.context, name='edit')(
             self.context, self.request)
-        validated = schema.deserialize(self.request.form.get('data'))
+        validated = schema.deserialize(data['attributes'])
 
         for k, v in validated.items():
             setattr(self.context, k, v)
@@ -123,12 +142,12 @@ class RestView(object):
 
     @view_config(request_method='PATCH')
     def patch(self):
-        schema = get_schema(self.context, self.request)
         data = self.request.json_body['data']
 
         assert data['id'] == self.context.name
         assert data['type'] == self.context.type_info.name
 
+        schema = get_schema(self.context, self.request)
         validated = schema.deserialize(data['attributes'])
         attrs = dict((k, v) for k, v in validated.items()
                      if k in data['attributes'])
@@ -140,11 +159,25 @@ class RestView(object):
     @view_config(request_method='PUT')
     def put(self):
         # we never accept id, it doesn't conform to jsonapi format
-        return
+        data = self.request.json_body['data']
+
+        name=_schema_factory_name(type_name=data['type'])
+        schema_factory = self.request.registry.getUtility(ISchemaFactory,
+                                                          name=name)
+        schema = schema_factory(None, self.request)
+        validated = schema.deserialize(data['attributes'])
+
+        klass = get_factory(self.request, data['type'])
+        name = title_to_name(validated['title'], blacklist=self.context.keys())
+        new_item = self.context[name] = klass(**validated)
+
+        return new_item
 
     @view_config(request_method='DELETE')
     def delete(self):
-        pass
+        parent = self.context.__parent__
+        del parent[self.context.__name__]
+        return HTTPNoContent()
 
 
 def get_schema(obj, request, name=u'default'):
@@ -152,6 +185,9 @@ def get_schema(obj, request, name=u'default'):
     schema_factory = request.registry.getUtility(ISchemaFactory,
                                                  name=factory_name)
     return schema_factory(obj, request)
+
+def get_factory(request, name):
+    return request.registry.getUtility(IContentFactory, name=name)
 
 
 def filter_schema(schema, allowed_fields):
