@@ -14,13 +14,13 @@ class TestNode:
         # The root object has a persistent ACL set:
         assert (
             root.__acl__[1:] == [
+                ('Allow', 'role:viewer', u'view'),
                 ('Allow', 'role:owner', u'view'),
                 ('Allow', 'role:owner', u'add'),
                 ('Allow', 'role:owner', u'edit'),
                 ('Allow', 'role:owner', u'delete'),
                 ('Allow', 'role:owner', u'manage'),
                 ('Allow', 'role:owner', u'state_change'),
-                ('Allow', 'role:viewer', u'view'),
                 ('Allow', 'role:editor', u'view'),
                 ('Allow', 'role:editor', u'add'),
                 ('Allow', 'role:editor', u'edit'),
